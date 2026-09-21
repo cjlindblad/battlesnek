@@ -26,7 +26,7 @@ ____   ____.__        __  .__
              `);
   })
 
-  app.get("/kamelåså", (req: Request, res: Response) => {
+  app.get("/kamel%C3%A5s%C3%A5", (req: Request, res: Response) => {
     res.send('🍻');
   })
 
