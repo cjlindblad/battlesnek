@@ -8,7 +8,9 @@
     "build": "tsc",
     "prestart": "npm run build",
     "start": "node ./build/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "local:4": "battlesnake play -W 11 -H 11 -g standard -m standard -t 500 --name snake1 --url http://localhost:8000 --name snake2 --url http://localhost:8000 --name snake3 --url http://localhost:8000 --name snake4 --url http://localhost:8000 --browser",
+    "local:1": "battlesnake play -W 11 -H 11 --name me --url http://localhost:8000 -g solo --browser"
   },
   "repository": {
     "type": "git",
