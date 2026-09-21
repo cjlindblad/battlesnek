@@ -15,6 +15,17 @@ export default function runServer(handlers: BattlesnakeHandlers) {
     res.send(handlers.info());
   });
 
+  app.get("/viati", (req: Request, res: Response) => {
+    res.type('text/plain').send(`
+____   ____.__        __  .__ 
+\\   \\ /   /|__|____ _/  |_|__|
+ \\   Y   / |  \\__  \\\\   __\\  |
+  \\     /  |  |/ __ \\|  | |  |
+   \\___/   |__(____  /__| |__|
+                   \\/         
+             `);
+  })
+
   app.post("/start", (req: Request, res: Response) => {
     handlers.start(req.body);
     res.send("ok");
