@@ -26,6 +26,10 @@ ____   ____.__        __  .__
              `);
   })
 
+  app.get("/kamelåså", (req: Request, res: Response) => {
+    res.send('🍻');
+  })
+
   app.post("/start", (req: Request, res: Response) => {
     handlers.start(req.body);
     res.send("ok");
