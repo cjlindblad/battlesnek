@@ -12,7 +12,8 @@
 
 import runServer from './server';
 import { GameState, InfoResponse, MoveResponse } from './types';
-import { coordKey, findNearestFood, isAdjacent, step, turnsUntilFree } from './board';
+import { coordKey, isAdjacent, step, turnsUntilFree } from './board';
+import { selectTactic } from './tactics';
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -111,14 +112,16 @@ function move(gameState: GameState): MoveResponse {
     !dangerousHeads.some(head => isAdjacent(head, step(myHead, direction))));
   const candidateMoves = preferredMoves.length > 0 ? preferredMoves : safeMoves;
 
-  // Head towards the nearest reachable food, or move randomly if there is none.
-  const foodPath = findNearestFood(gameState, candidateMoves, freeAfter);
-  const nextMove = foodPath
-    ? foodPath.move
+  // Let the current tactic pick among the candidate moves, or move randomly
+  // if it has no preference.
+  const tactic = selectTactic(gameState);
+  const decision = tactic.chooseMove({ gameState, candidateMoves, freeAfter });
+  const nextMove = decision
+    ? decision.move
     : candidateMoves[Math.floor(Math.random() * candidateMoves.length)];
 
-  const reason = foodPath ? `food ${foodPath.distance} away` : 'no reachable food';
-  console.log(`MOVE ${gameState.turn}: ${nextMove} (${reason})`)
+  const reason = decision ? decision.reason : 'random';
+  console.log(`MOVE ${gameState.turn}: ${nextMove} [${tactic.name}] (${reason})`)
   return { move: nextMove };
 }
 
