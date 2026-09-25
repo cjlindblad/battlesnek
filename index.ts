@@ -140,7 +140,7 @@ function move(gameState: GameState): MoveResponse {
   // Let the current tactic pick among the candidate moves, or move randomly
   // if it has no preference.
   const tactic = selectTactic(gameState);
-  const decision = tactic.chooseMove({ gameState, candidateMoves, freeAfter: predictedFreeAfter });
+  const decision = tactic.chooseMove({ gameState, candidateMoves, freeAfter, predictedFreeAfter });
   const nextMove = decision
     ? decision.move
     : candidateMoves[Math.floor(Math.random() * candidateMoves.length)];

@@ -175,3 +175,66 @@ export function reachableSpace(
   }
   return count;
 }
+
+export interface HeadStart {
+  id: string;
+  position: Coord;
+  // How many moves from now the head is at `position`.
+  distance: number;
+}
+
+// Territory: each square belongs to the snake whose head can reach it first,
+// and squares reached by several snakes at the same time belong to no one.
+// Like the walk above, squares covered by bodies can be entered once they will
+// have been left. Returns the number of squares per snake id.
+export function territory(
+  gameState: GameState,
+  starts: HeadStart[],
+  freeAfter: Map<string, number>,
+): Map<string, number> {
+  const owner = new Map<string, string | null>();
+  const reachedAt = new Map<string, number>();
+  const queue = [...starts].sort((a, b) => a.distance - b.distance);
+  for (const { id, position, distance } of queue) {
+    owner.set(coordKey(position), id);
+    reachedAt.set(coordKey(position), distance);
+  }
+
+  for (let i = 0; i < queue.length; i++) {
+    const { position, distance } = queue[i];
+    const id = owner.get(coordKey(position));
+    if (!id) {
+      continue; // Contested squares don't extend anyone's territory.
+    }
+
+    for (const direction of Object.keys(DIRECTIONS)) {
+      const next = step(position, direction);
+      const key = coordKey(next);
+      const nextDistance = distance + 1;
+      if (!isInBounds(next, gameState)) {
+        continue;
+      }
+      const seenAt = reachedAt.get(key);
+      if (seenAt !== undefined) {
+        if (seenAt === nextDistance && owner.get(key) !== id) {
+          owner.set(key, null);
+        }
+        continue;
+      }
+      if ((freeAfter.get(key) ?? 0) > nextDistance) {
+        continue;
+      }
+      reachedAt.set(key, nextDistance);
+      owner.set(key, id);
+      queue.push({ id, position: next, distance: nextDistance });
+    }
+  }
+
+  const counts = new Map<string, number>();
+  for (const id of owner.values()) {
+    if (id) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
