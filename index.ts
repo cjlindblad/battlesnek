@@ -12,7 +12,14 @@
 
 import runServer from './server';
 import { GameState, InfoResponse, MoveResponse } from './types';
-import { coordKey, isAdjacent, reachableSpace, step, turnsUntilFree } from './board';
+import {
+  coordKey,
+  possibleOpponentMoves,
+  reachableSpace,
+  step,
+  turnsUntilFree,
+  withOpponentMoves,
+} from './board';
 import { selectTactic } from './tactics';
 
 // info is called when you create your Battlesnake on play.battlesnake.com
@@ -102,11 +109,16 @@ function move(gameState: GameState): MoveResponse {
     return { move: "down" };
   }
 
+  // Plan beyond this move as if opponents could be in any square they can
+  // reach next turn, so we don't count on space or paths they can cut off.
+  const opponentMoves = possibleOpponentMoves(gameState, freeAfter);
+  const predictedFreeAfter = withOpponentMoves(gameState, freeAfter, opponentMoves);
+
   // Avoid dead ends: moves that leave us less room than our own length. If every
   // move is a dead end, take the one(s) with the most room and hope it opens up.
   const space: { [direction: string]: number } = {};
   for (const direction of safeMoves) {
-    space[direction] = reachableSpace(gameState, direction, freeAfter);
+    space[direction] = reachableSpace(gameState, direction, predictedFreeAfter);
   }
   const roomyMoves = safeMoves.filter(direction => space[direction] >= gameState.you.length);
   const mostSpace = Math.max(...safeMoves.map(direction => space[direction]));
@@ -117,17 +129,18 @@ function move(gameState: GameState): MoveResponse {
   // Avoid squares an opponent of equal or greater length could also move into,
   // since we'd lose (or tie) a head-to-head collision. Only a preference, as
   // being boxed in is worse than risking it.
-  const dangerousHeads = gameState.board.snakes
-    .filter(snake => snake.id !== gameState.you.id && snake.length >= gameState.you.length)
-    .map(snake => snake.head);
+  // Smaller opponents lose a head-to-head, so their squares are fine.
+  const contestedSquares = new Set(opponentMoves
+    .filter(({ snake }) => snake.length >= gameState.you.length)
+    .map(({ position }) => coordKey(position)));
   const preferredMoves = openMoves.filter(direction =>
-    !dangerousHeads.some(head => isAdjacent(head, step(myHead, direction))));
+    !contestedSquares.has(coordKey(step(myHead, direction))));
   const candidateMoves = preferredMoves.length > 0 ? preferredMoves : openMoves;
 
   // Let the current tactic pick among the candidate moves, or move randomly
   // if it has no preference.
   const tactic = selectTactic(gameState);
-  const decision = tactic.chooseMove({ gameState, candidateMoves, freeAfter });
+  const decision = tactic.chooseMove({ gameState, candidateMoves, freeAfter: predictedFreeAfter });
   const nextMove = decision
     ? decision.move
     : candidateMoves[Math.floor(Math.random() * candidateMoves.length)];

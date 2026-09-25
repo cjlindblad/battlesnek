@@ -1,4 +1,4 @@
-import { Coord, GameState } from './types';
+import { Battlesnake, Coord, GameState } from './types';
 
 export const DIRECTIONS: { [direction: string]: Coord } = {
   up: { x: 0, y: 1 },
@@ -47,6 +47,53 @@ export function turnsUntilFree(gameState: GameState): Map<string, number> {
     });
   }
   return freeAfter;
+}
+
+export interface OpponentMove {
+  snake: Battlesnake;
+  position: Coord;
+}
+
+// Every square an opponent could move its head into next turn: on the board
+// and not into a body that will still be there.
+export function possibleOpponentMoves(
+  gameState: GameState,
+  freeAfter: Map<string, number>,
+): OpponentMove[] {
+  const moves: OpponentMove[] = [];
+  for (const snake of gameState.board.snakes) {
+    if (snake.id === gameState.you.id) {
+      continue;
+    }
+    for (const direction of Object.keys(DIRECTIONS)) {
+      const position = step(snake.head, direction);
+      if (isInBounds(position, gameState) && (freeAfter.get(coordKey(position)) ?? 0) <= 1) {
+        moves.push({ snake, position });
+      }
+    }
+  }
+  return moves;
+}
+
+// `freeAfter` plus every square an opponent could move into next turn, treated
+// as occupied from then on for as long as that snake's body will cover it.
+// This is pessimistic, since each opponent only takes one of its options, but
+// it keeps our paths and space estimates from relying on squares an opponent
+// could take from us.
+export function withOpponentMoves(
+  gameState: GameState,
+  freeAfter: Map<string, number>,
+  opponentMoves: OpponentMove[],
+): Map<string, number> {
+  const predicted = new Map(freeAfter);
+  const food = new Set(gameState.board.food.map(coordKey));
+  for (const { snake, position } of opponentMoves) {
+    const key = coordKey(position);
+    const growth = food.has(key) ? 1 : 0;
+    const turns = 1 + snake.body.length + growth;
+    predicted.set(key, Math.max(predicted.get(key) ?? 0, turns));
+  }
+  return predicted;
 }
 
 interface Visit {
