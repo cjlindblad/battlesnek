@@ -11,15 +11,8 @@
 // For more info see docs.battlesnake.com
 
 import runServer from './server';
-import { Coord, GameState, InfoResponse, MoveResponse } from './types';
-
-function coordKey(coord: Coord): string {
-  return `${coord.x},${coord.y}`;
-}
-
-function isAdjacent(a: Coord, b: Coord): boolean {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
-}
+import { GameState, InfoResponse, MoveResponse } from './types';
+import { coordKey, findNearestFood, isAdjacent, step, turnsUntilFree } from './board';
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -94,28 +87,9 @@ function move(gameState: GameState): MoveResponse {
 
   // Prevent colliding with any snake body, including our own.
   // board.snakes includes us, so this covers both self and opponents.
-  const nextPositions: { [key: string]: Coord } = {
-    up: { x: myHead.x, y: myHead.y + 1 },
-    down: { x: myHead.x, y: myHead.y - 1 },
-    left: { x: myHead.x - 1, y: myHead.y },
-    right: { x: myHead.x + 1, y: myHead.y },
-  };
-
-  const occupied = new Set<string>();
-  for (const snake of gameState.board.snakes) {
-    const body = snake.body;
-    const tail = body[body.length - 1];
-    // A tail moves out of the way next turn, unless the snake is growing:
-    // a stacked tail means it just ate, and an opponent next to food might eat now.
-    const tailStacked = body.length > 1 && coordKey(body[body.length - 2]) === coordKey(tail);
-    const mightEat = snake.id !== gameState.you.id &&
-      gameState.board.food.some(food => isAdjacent(food, snake.head));
-    const segments = tailStacked || mightEat ? body : body.slice(0, -1);
-    segments.forEach(segment => occupied.add(coordKey(segment)));
-  }
-
-  for (const [direction, position] of Object.entries(nextPositions)) {
-    if (occupied.has(coordKey(position))) {
+  const freeAfter = turnsUntilFree(gameState);
+  for (const direction of Object.keys(isMoveSafe)) {
+    if ((freeAfter.get(coordKey(step(myHead, direction))) ?? 0) > 1) {
       isMoveSafe[direction] = false;
     }
   }
@@ -134,16 +108,17 @@ function move(gameState: GameState): MoveResponse {
     .filter(snake => snake.id !== gameState.you.id && snake.length >= gameState.you.length)
     .map(snake => snake.head);
   const preferredMoves = safeMoves.filter(direction =>
-    !dangerousHeads.some(head => isAdjacent(head, nextPositions[direction])));
+    !dangerousHeads.some(head => isAdjacent(head, step(myHead, direction))));
   const candidateMoves = preferredMoves.length > 0 ? preferredMoves : safeMoves;
 
-  // Choose a random move from the candidate moves
-  const nextMove = candidateMoves[Math.floor(Math.random() * candidateMoves.length)];
+  // Head towards the nearest reachable food, or move randomly if there is none.
+  const foodPath = findNearestFood(gameState, candidateMoves, freeAfter);
+  const nextMove = foodPath
+    ? foodPath.move
+    : candidateMoves[Math.floor(Math.random() * candidateMoves.length)];
 
-  // TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
-  // food = gameState.board.food;
-
-  console.log(`MOVE ${gameState.turn}: ${nextMove}`)
+  const reason = foodPath ? `food ${foodPath.distance} away` : 'no reachable food';
+  console.log(`MOVE ${gameState.turn}: ${nextMove} (${reason})`)
   return { move: nextMove };
 }
 
