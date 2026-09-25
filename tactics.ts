@@ -36,7 +36,7 @@ export interface Tactic {
 const HUNGRY_HEALTH = 30;
 
 // We focus on food until we are this long, then go on the attack.
-const GROW_UNTIL_LENGTH = 16;
+const GROW_UNTIL_LENGTH = 25;
 
 // While attacking, food at most this many moves away is grabbed on the way.
 const GRAB_FOOD_DISTANCE = 2;
