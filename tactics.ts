@@ -24,6 +24,9 @@ export interface Tactic {
 // Below this health we go for food even when we don't need to grow.
 const HUNGRY_HEALTH = 30;
 
+// We focus on food until we are this long.
+const GROW_UNTIL_LENGTH = 16;
+
 function seekFood({ gameState, candidateMoves, freeAfter }: TacticContext): TacticDecision | null {
   const foodPath = findNearestFood(gameState, candidateMoves, freeAfter);
   return foodPath ? { move: foodPath.move, reason: `food ${foodPath.distance} away` } : null;
@@ -47,7 +50,7 @@ const cruise: Tactic = {
 };
 
 export function selectTactic(gameState: GameState): Tactic {
-  if (gameState.you.length < gameState.board.width) {
+  if (gameState.you.length < GROW_UNTIL_LENGTH) {
     return grow;
   }
   return cruise;
