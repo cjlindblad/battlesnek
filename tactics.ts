@@ -31,6 +31,9 @@ const HUNGRY_HEALTH = 30;
 // We focus on food until we are this long, then go on the attack.
 const GROW_UNTIL_LENGTH = 16;
 
+// While attacking, food at most this many moves away is grabbed on the way.
+const GRAB_FOOD_DISTANCE = 2;
+
 // Go for the nearest food we can reach before any opponent. Only if there is
 // none do we race opponents for food they could get to first (or at the same
 // time).
@@ -73,13 +76,19 @@ function nearestOpponent(gameState: GameState): Battlesnake | null {
 const attack: Tactic = {
   name: 'attack',
   chooseMove(context) {
-    const { gameState, candidateMoves, freeAfter } = context;
+    const { gameState, candidateMoves, freeAfter, predictedFreeAfter } = context;
     const { you } = gameState;
     if (you.health < HUNGRY_HEALTH) {
       const food = seekFood(context);
       if (food) {
         return food;
       }
+    }
+
+    // Food right next to us is worth a short detour from the attack.
+    const nearbyFood = findNearestFood(gameState, candidateMoves, predictedFreeAfter);
+    if (nearbyFood && nearbyFood.distance <= GRAB_FOOD_DISTANCE) {
+      return { move: nearbyFood.move, reason: `grabbing food ${nearbyFood.distance} away` };
     }
 
     const target = nearestOpponent(gameState);
