@@ -10,7 +10,8 @@
     "start": "node ./build/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "local:4": "battlesnake play -W 11 -H 11 -g standard -m standard -t 500 --name snake1 --url http://localhost:8000 --name snake2 --url http://localhost:8000 --name snake3 --url http://localhost:8000 --name snake4 --url http://localhost:8000 --browser",
-    "local:1": "battlesnake play -W 11 -H 11 --name me --url http://localhost:8000 -g solo --browser"
+    "local:1": "battlesnake play -W 11 -H 11 --name me --url http://localhost:8000 -g solo --browser",
+    "dev": "tsx watch index.ts"
   },
   "repository": {
     "type": "git",
@@ -21,5 +22,8 @@
     "@types/node": "^18.7.11",
     "express": "^4.18.1",
     "typescript": "^4.7.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }
