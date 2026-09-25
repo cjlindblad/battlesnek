@@ -49,25 +49,25 @@ export function turnsUntilFree(gameState: GameState): Map<string, number> {
   return freeAfter;
 }
 
-export interface FoodPath {
-  move: string;
+interface Visit {
+  position: Coord;
   distance: number;
+  firstMove: string;
 }
 
-// Breadth-first search from our head to the nearest reachable food. Every step
-// costs the same, so BFS finds shortest paths (Dijkstra would give the same
-// result, just slower), and the first food dequeued is the closest one.
-// Squares blocked by snakes are only avoided while they are still occupied at
-// the turn we would arrive. Only `firstMoves` are considered for the first step.
-export function findNearestFood(
+// Breadth-first walk from our head, yielding every reachable square in order
+// of distance. Every step costs the same, so BFS gives shortest distances
+// (Dijkstra would give the same result, just slower). Squares covered by
+// snakes are only avoided while they are still occupied at the turn we would
+// arrive. Only `firstMoves` are considered for the first step.
+function* walk(
   gameState: GameState,
   firstMoves: string[],
   freeAfter: Map<string, number>,
-): FoodPath | null {
-  const food = new Set(gameState.board.food.map(coordKey));
+): Generator<Visit> {
   const head = gameState.you.head;
   const visited = new Set<string>([coordKey(head)]);
-  const queue: { position: Coord; distance: number; firstMove: string }[] = [];
+  const queue: Visit[] = [];
 
   for (const direction of firstMoves) {
     const position = step(head, direction);
@@ -77,9 +77,7 @@ export function findNearestFood(
 
   for (let i = 0; i < queue.length; i++) {
     const { position, distance, firstMove } = queue[i];
-    if (food.has(coordKey(position))) {
-      return { move: firstMove, distance };
-    }
+    yield queue[i];
 
     for (const direction of Object.keys(DIRECTIONS)) {
       const next = step(position, direction);
@@ -94,6 +92,39 @@ export function findNearestFood(
       queue.push({ position: next, distance: distance + 1, firstMove });
     }
   }
+}
 
+export interface FoodPath {
+  move: string;
+  distance: number;
+}
+
+// The nearest reachable food; the first one the walk reaches is the closest.
+export function findNearestFood(
+  gameState: GameState,
+  firstMoves: string[],
+  freeAfter: Map<string, number>,
+): FoodPath | null {
+  const food = new Set(gameState.board.food.map(coordKey));
+  for (const { position, distance, firstMove } of walk(gameState, firstMoves, freeAfter)) {
+    if (food.has(coordKey(position))) {
+      return { move: firstMove, distance };
+    }
+  }
   return null;
+}
+
+// Flood fill: how many squares we could reach after making `move`, counting
+// squares that snakes (including our own tail) will have left by the time we
+// get there. If this is less than our length we're heading into a dead end.
+export function reachableSpace(
+  gameState: GameState,
+  move: string,
+  freeAfter: Map<string, number>,
+): number {
+  let count = 0;
+  for (const _ of walk(gameState, [move], freeAfter)) {
+    count++;
+  }
+  return count;
 }

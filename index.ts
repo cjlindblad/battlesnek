@@ -12,7 +12,7 @@
 
 import runServer from './server';
 import { GameState, InfoResponse, MoveResponse } from './types';
-import { coordKey, isAdjacent, step, turnsUntilFree } from './board';
+import { coordKey, isAdjacent, reachableSpace, step, turnsUntilFree } from './board';
 import { selectTactic } from './tactics';
 
 // info is called when you create your Battlesnake on play.battlesnake.com
@@ -102,15 +102,27 @@ function move(gameState: GameState): MoveResponse {
     return { move: "down" };
   }
 
+  // Avoid dead ends: moves that leave us less room than our own length. If every
+  // move is a dead end, take the one(s) with the most room and hope it opens up.
+  const space: { [direction: string]: number } = {};
+  for (const direction of safeMoves) {
+    space[direction] = reachableSpace(gameState, direction, freeAfter);
+  }
+  const roomyMoves = safeMoves.filter(direction => space[direction] >= gameState.you.length);
+  const mostSpace = Math.max(...safeMoves.map(direction => space[direction]));
+  const openMoves = roomyMoves.length > 0
+    ? roomyMoves
+    : safeMoves.filter(direction => space[direction] === mostSpace);
+
   // Avoid squares an opponent of equal or greater length could also move into,
   // since we'd lose (or tie) a head-to-head collision. Only a preference, as
   // being boxed in is worse than risking it.
   const dangerousHeads = gameState.board.snakes
     .filter(snake => snake.id !== gameState.you.id && snake.length >= gameState.you.length)
     .map(snake => snake.head);
-  const preferredMoves = safeMoves.filter(direction =>
+  const preferredMoves = openMoves.filter(direction =>
     !dangerousHeads.some(head => isAdjacent(head, step(myHead, direction))));
-  const candidateMoves = preferredMoves.length > 0 ? preferredMoves : safeMoves;
+  const candidateMoves = preferredMoves.length > 0 ? preferredMoves : openMoves;
 
   // Let the current tactic pick among the candidate moves, or move randomly
   // if it has no preference.
