@@ -1,4 +1,11 @@
-import { coordKey, findNearestFood, squareOwners, step, territory } from './board';
+import {
+  coordKey,
+  findNearestFood,
+  possibleOpponentMoves,
+  squareOwners,
+  step,
+  territory,
+} from './board';
 import { Battlesnake, GameState } from './types';
 
 // Everything a tactic needs to pick a move. `candidateMoves` have already been
@@ -133,9 +140,74 @@ const attack: Tactic = {
   },
 };
 
-export function selectTactic(gameState: GameState): Tactic {
-  if (gameState.you.length < GROW_UNTIL_LENGTH) {
-    return grow;
+// Hunt for a head-on collision when the opponent's head is at most this far.
+const HUNT_DISTANCE = 4;
+
+function headDistance(a: Battlesnake, b: Battlesnake): number {
+  return Math.abs(a.head.x - b.head.x) + Math.abs(a.head.y - b.head.y);
+}
+
+// Of `moves`, the one leaving `target` the fewest squares of territory.
+function mostConfining(context: TacticContext, moves: string[], target: Battlesnake): string {
+  const { gameState, freeAfter } = context;
+  const { you } = gameState;
+  const theirTerritory = (move: string) => territory(gameState, [
+    { id: target.id, position: target.head, distance: 0 },
+    { id: you.id, position: step(you.head, move), distance: 1 },
+  ], freeAfter).get(target.id) ?? 0;
+  return moves
+    .map(move => ({ move, theirs: theirTerritory(move) }))
+    .sort((a, b) => a.theirs - b.theirs)[0].move;
+}
+
+// One opponent left and we're longer: a head-on collision kills it and wins the
+// game. Both heads move every turn, so the distance between them stays even or
+// odd forever; only at an even distance can they land on the same square
+// (at distance 1 they'd swap places and hit each other's necks, killing both).
+//
+// At distance 2 we move onto a square the opponent could also move into, and
+// further away we close in. Either way we pick the move that leaves it the
+// least room to get away. If no move does that, the regular tactic decides.
+function shouldHunt(gameState: GameState): boolean {
+  const opponents = gameState.board.snakes.filter(snake => snake.id !== gameState.you.id);
+  if (opponents.length !== 1) {
+    return false;
   }
-  return attack;
+  const distance = headDistance(gameState.you, opponents[0]);
+  return gameState.you.length > opponents[0].length &&
+    distance % 2 === 0 && distance <= HUNT_DISTANCE;
+}
+
+const hunt: Tactic = {
+  name: 'hunt',
+  chooseMove(context) {
+    const { gameState, candidateMoves, freeAfter } = context;
+    const { you } = gameState;
+    const target = gameState.board.snakes.find(snake => snake.id !== you.id)!;
+    const distance = headDistance(you, target);
+
+    const theirSquares = new Set(possibleOpponentMoves(gameState, freeAfter).map(({ position }) => coordKey(position)));
+    const strikes = candidateMoves.filter(move => theirSquares.has(coordKey(step(you.head, move))));
+    if (strikes.length > 0) {
+      return { move: mostConfining(context, strikes, target), reason: `going head-on with ${target.name}` };
+    }
+
+    const closer = candidateMoves.filter(move => {
+      const next = step(you.head, move);
+      return Math.abs(next.x - target.head.x) + Math.abs(next.y - target.head.y) < distance;
+    });
+    if (closer.length > 0) {
+      return { move: mostConfining(context, closer, target), reason: `closing in on ${target.name}, ${distance} away` };
+    }
+
+    return phaseTactic(gameState).chooseMove(context);
+  },
+};
+
+function phaseTactic(gameState: GameState): Tactic {
+  return gameState.you.length < GROW_UNTIL_LENGTH ? grow : attack;
+}
+
+export function selectTactic(gameState: GameState): Tactic {
+  return shouldHunt(gameState) ? hunt : phaseTactic(gameState);
 }
