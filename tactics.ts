@@ -72,42 +72,55 @@ function nearestOpponent(gameState: GameState): Battlesnake | null {
 // reaches each square first, and pick the move that leaves the opponent the
 // fewest squares, preferring more squares for us on a tie. Moving to cut off
 // the opponent turns squares it could have reached into ours.
-// We still eat when hungry, since starving would end the game.
+//
+// Safety first: we only consider moves that leave us at least our own length
+// in territory, so we can't be squeezed ourselves while attacking. Eating (when
+// hungry, or grabbing food close by) is also limited to those moves.
 const attack: Tactic = {
   name: 'attack',
   chooseMove(context) {
     const { gameState, candidateMoves, freeAfter, predictedFreeAfter } = context;
     const { you } = gameState;
+
+    const opponentStarts = gameState.board.snakes
+      .filter(snake => snake.id !== you.id)
+      .map(snake => ({ id: snake.id, position: snake.head, distance: 0 }));
+    const options = candidateMoves.map(move => {
+      const counts = territory(gameState, [
+        ...opponentStarts,
+        { id: you.id, position: step(you.head, move), distance: 1 },
+      ], freeAfter);
+      return { move, counts, ours: counts.get(you.id) ?? 0 };
+    });
+
+    // If no move gives us enough room, take the one(s) giving the most.
+    const roomy = options.filter(option => option.ours >= you.length);
+    const mostRoom = Math.max(...options.map(option => option.ours));
+    const safeOptions = roomy.length > 0 ? roomy : options.filter(option => option.ours === mostRoom);
+    const safeMoves = safeOptions.map(option => option.move);
+
     if (you.health < HUNGRY_HEALTH) {
-      const food = seekFood(context);
+      const food = seekFood({ ...context, candidateMoves: safeMoves });
       if (food) {
         return food;
       }
     }
 
     // Food right next to us is worth a short detour from the attack.
-    const nearbyFood = findNearestFood(gameState, candidateMoves, predictedFreeAfter);
+    const nearbyFood = findNearestFood(gameState, safeMoves, predictedFreeAfter);
     if (nearbyFood && nearbyFood.distance <= GRAB_FOOD_DISTANCE) {
       return { move: nearbyFood.move, reason: `grabbing food ${nearbyFood.distance} away` };
     }
 
     const target = nearestOpponent(gameState);
     if (!target) {
-      return null;
+      const move = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+      return { move, reason: 'no opponents, random' };
     }
 
-    const opponentStarts = gameState.board.snakes
-      .filter(snake => snake.id !== you.id)
-      .map(snake => ({ id: snake.id, position: snake.head, distance: 0 }));
-
     let best: { move: string; theirs: number; ours: number } | null = null;
-    for (const move of candidateMoves) {
-      const counts = territory(gameState, [
-        ...opponentStarts,
-        { id: you.id, position: step(you.head, move), distance: 1 },
-      ], freeAfter);
+    for (const { move, counts, ours } of safeOptions) {
       const theirs = counts.get(target.id) ?? 0;
-      const ours = counts.get(you.id) ?? 0;
       if (!best || theirs < best.theirs || (theirs === best.theirs && ours > best.ours)) {
         best = { move, theirs, ours };
       }
