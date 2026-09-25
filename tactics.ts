@@ -1,4 +1,4 @@
-import { findNearestFood, step, territory } from './board';
+import { coordKey, findNearestFood, squareOwners, step, territory } from './board';
 import { Battlesnake, GameState } from './types';
 
 // Everything a tactic needs to pick a move. `candidateMoves` have already been
@@ -31,9 +31,23 @@ const HUNGRY_HEALTH = 30;
 // We focus on food until we are this long, then go on the attack.
 const GROW_UNTIL_LENGTH = 16;
 
-function seekFood({ gameState, candidateMoves, predictedFreeAfter }: TacticContext): TacticDecision | null {
-  const foodPath = findNearestFood(gameState, candidateMoves, predictedFreeAfter);
-  return foodPath ? { move: foodPath.move, reason: `food ${foodPath.distance} away` } : null;
+// Go for the nearest food we can reach before any opponent. Only if there is
+// none do we race opponents for food they could get to first (or at the same
+// time).
+function seekFood({ gameState, candidateMoves, freeAfter, predictedFreeAfter }: TacticContext): TacticDecision | null {
+  const owners = squareOwners(
+    gameState,
+    gameState.board.snakes.map(snake => ({ id: snake.id, position: snake.head, distance: 0 })),
+    freeAfter,
+  );
+  const ourFood = gameState.board.food.filter(food => owners.get(coordKey(food)) === gameState.you.id);
+  const uncontested = findNearestFood(gameState, candidateMoves, predictedFreeAfter, ourFood);
+  if (uncontested) {
+    return { move: uncontested.move, reason: `food ${uncontested.distance} away, uncontested` };
+  }
+
+  const contested = findNearestFood(gameState, candidateMoves, predictedFreeAfter);
+  return contested && { move: contested.move, reason: `food ${contested.distance} away, contested` };
 }
 
 // Early game: eat as much as possible to get long.

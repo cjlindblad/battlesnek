@@ -147,12 +147,14 @@ export interface FoodPath {
 }
 
 // The nearest reachable food; the first one the walk reaches is the closest.
+// Only `targets` are considered, which defaults to all food on the board.
 export function findNearestFood(
   gameState: GameState,
   firstMoves: string[],
   freeAfter: Map<string, number>,
+  targets: Coord[] = gameState.board.food,
 ): FoodPath | null {
-  const food = new Set(gameState.board.food.map(coordKey));
+  const food = new Set(targets.map(coordKey));
   for (const { position, distance, firstMove } of walk(gameState, firstMoves, freeAfter)) {
     if (food.has(coordKey(position))) {
       return { move: firstMove, distance };
@@ -183,15 +185,15 @@ export interface HeadStart {
   distance: number;
 }
 
-// Territory: each square belongs to the snake whose head can reach it first,
-// and squares reached by several snakes at the same time belong to no one.
-// Like the walk above, squares covered by bodies can be entered once they will
-// have been left. Returns the number of squares per snake id.
-export function territory(
+// Each square belongs to the snake whose head can reach it first, and squares
+// reached by several snakes at the same time belong to no one (null). Like the
+// walk above, squares covered by bodies can be entered once they will have
+// been left. Returns the owning snake id per square key.
+export function squareOwners(
   gameState: GameState,
   starts: HeadStart[],
   freeAfter: Map<string, number>,
-): Map<string, number> {
+): Map<string, string | null> {
   const owner = new Map<string, string | null>();
   const reachedAt = new Map<string, number>();
   const queue = [...starts].sort((a, b) => a.distance - b.distance);
@@ -230,8 +232,17 @@ export function territory(
     }
   }
 
+  return owner;
+}
+
+// The number of squares each snake owns, see squareOwners.
+export function territory(
+  gameState: GameState,
+  starts: HeadStart[],
+  freeAfter: Map<string, number>,
+): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const id of owner.values()) {
+  for (const id of squareOwners(gameState, starts, freeAfter).values()) {
     if (id) {
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
