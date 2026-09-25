@@ -1,4 +1,18 @@
 import express, { Request, Response, NextFunction } from "express"
+import { execSync } from "child_process"
+
+// Deployed builds get the commit baked in via the GIT_COMMIT build arg.
+// Locally we fall back to asking git directly.
+function currentCommit(): string {
+  if (process.env.GIT_COMMIT) {
+    return process.env.GIT_COMMIT;
+  }
+  try {
+    return execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return "unknown";
+  }
+}
 
 export interface BattlesnakeHandlers {
   info: Function;
@@ -10,6 +24,7 @@ export interface BattlesnakeHandlers {
 export default function runServer(handlers: BattlesnakeHandlers) {
   const app = express();
   app.use(express.json());
+  const commit = currentCommit();
 
   app.get("/", (req: Request, res: Response) => {
     res.send(handlers.info());
@@ -29,6 +44,10 @@ ____   ____.__        __  .__
   app.get("/kamel%C3%A5s%C3%A5", (req: Request, res: Response) => {
     res.send('🇩🇰🐷🍻');
   })
+
+  app.get("/version", (req: Request, res: Response) => {
+    res.send({ commit });
+  });
 
   app.post("/start", (req: Request, res: Response) => {
     handlers.start(req.body);
