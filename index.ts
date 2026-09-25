@@ -11,7 +11,15 @@
 // For more info see docs.battlesnake.com
 
 import runServer from './server';
-import { GameState, InfoResponse, MoveResponse } from './types';
+import { Coord, GameState, InfoResponse, MoveResponse } from './types';
+
+function coordKey(coord: Coord): string {
+  return `${coord.x},${coord.y}`;
+}
+
+function isAdjacent(a: Coord, b: Coord): boolean {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
+}
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -84,11 +92,33 @@ function move(gameState: GameState): MoveResponse {
     isMoveSafe.up = false;
   }
 
-  // TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-  // myBody = gameState.you.body;
+  // Prevent colliding with any snake body, including our own.
+  // board.snakes includes us, so this covers both self and opponents.
+  const nextPositions: { [key: string]: Coord } = {
+    up: { x: myHead.x, y: myHead.y + 1 },
+    down: { x: myHead.x, y: myHead.y - 1 },
+    left: { x: myHead.x - 1, y: myHead.y },
+    right: { x: myHead.x + 1, y: myHead.y },
+  };
 
-  // TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-  // opponents = gameState.board.snakes;
+  const occupied = new Set<string>();
+  for (const snake of gameState.board.snakes) {
+    const body = snake.body;
+    const tail = body[body.length - 1];
+    // A tail moves out of the way next turn, unless the snake is growing:
+    // a stacked tail means it just ate, and an opponent next to food might eat now.
+    const tailStacked = body.length > 1 && coordKey(body[body.length - 2]) === coordKey(tail);
+    const mightEat = snake.id !== gameState.you.id &&
+      gameState.board.food.some(food => isAdjacent(food, snake.head));
+    const segments = tailStacked || mightEat ? body : body.slice(0, -1);
+    segments.forEach(segment => occupied.add(coordKey(segment)));
+  }
+
+  for (const [direction, position] of Object.entries(nextPositions)) {
+    if (occupied.has(coordKey(position))) {
+      isMoveSafe[direction] = false;
+    }
+  }
 
   // Are there any safe moves left?
   const safeMoves = Object.keys(isMoveSafe).filter(key => isMoveSafe[key]);
@@ -97,8 +127,18 @@ function move(gameState: GameState): MoveResponse {
     return { move: "down" };
   }
 
-  // Choose a random move from the safe moves
-  const nextMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+  // Avoid squares an opponent of equal or greater length could also move into,
+  // since we'd lose (or tie) a head-to-head collision. Only a preference, as
+  // being boxed in is worse than risking it.
+  const dangerousHeads = gameState.board.snakes
+    .filter(snake => snake.id !== gameState.you.id && snake.length >= gameState.you.length)
+    .map(snake => snake.head);
+  const preferredMoves = safeMoves.filter(direction =>
+    !dangerousHeads.some(head => isAdjacent(head, nextPositions[direction])));
+  const candidateMoves = preferredMoves.length > 0 ? preferredMoves : safeMoves;
+
+  // Choose a random move from the candidate moves
+  const nextMove = candidateMoves[Math.floor(Math.random() * candidateMoves.length)];
 
   // TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
   // food = gameState.board.food;
