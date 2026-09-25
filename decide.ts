@@ -1,7 +1,7 @@
 import {
   coordKey,
   possibleOpponentMoves,
-  reachableSpace,
+  reachableSquares,
   step,
   turnsUntilFree,
   withOpponentMoves,
@@ -83,17 +83,18 @@ export function decideMove(gameState: GameState): Decision {
   const opponentMoves = possibleOpponentMoves(gameState, freeAfter);
   const predictedFreeAfter = withOpponentMoves(gameState, freeAfter, opponentMoves);
 
-  // Avoid dead ends: moves that leave us less room than our own length. If every
-  // move is a dead end, take the one(s) with the most room and hope it opens up.
-  const space: { [direction: string]: number } = {};
-  for (const direction of safeMoves) {
-    space[direction] = reachableSpace(gameState, direction, predictedFreeAfter);
-  }
-  const roomyMoves = safeMoves.filter(direction => space[direction] >= gameState.you.length);
-  const mostSpace = Math.max(...safeMoves.map(direction => space[direction]));
-  const openMoves = roomyMoves.length > 0
-    ? roomyMoves
-    : safeMoves.filter(direction => space[direction] === mostSpace);
+  // Our moves can lead into separate areas, e.g. on either side of a gap
+  // between bodies. Always go into the largest one, which also keeps us out of
+  // dead ends. Two moves share an area if each can reach the other's first
+  // square; one-way reachability isn't enough, since a big area can often
+  // reach a small one only after our body has moved out of the way.
+  const reachable = new Map(safeMoves.map(direction =>
+    [direction, reachableSquares(gameState, direction, predictedFreeAfter)]));
+  const largest = safeMoves.reduce((best, direction) =>
+    reachable.get(direction)!.size > reachable.get(best)!.size ? direction : best);
+  const sameArea = (a: string, b: string) =>
+    reachable.get(a)!.has(coordKey(step(myHead, b))) && reachable.get(b)!.has(coordKey(step(myHead, a)));
+  const openMoves = safeMoves.filter(direction => direction === largest || sameArea(direction, largest));
 
   // Avoid squares an opponent of equal or greater length could also move into,
   // since we'd lose (or tie) a head-to-head collision. Only a preference, as

@@ -163,19 +163,18 @@ export function findNearestFood(
   return null;
 }
 
-// Flood fill: how many squares we could reach after making `move`, counting
-// squares that snakes (including our own tail) will have left by the time we
-// get there. If this is less than our length we're heading into a dead end.
-export function reachableSpace(
+// Flood fill: the squares we could reach after making `move`, counting squares
+// that snakes (including our own tail) will have left by the time we get there.
+export function reachableSquares(
   gameState: GameState,
   move: string,
   freeAfter: Map<string, number>,
-): number {
-  let count = 0;
-  for (const _ of walk(gameState, [move], freeAfter)) {
-    count++;
+): Set<string> {
+  const squares = new Set<string>();
+  for (const { position } of walk(gameState, [move], freeAfter)) {
+    squares.add(coordKey(position));
   }
-  return count;
+  return squares;
 }
 
 export interface HeadStart {
